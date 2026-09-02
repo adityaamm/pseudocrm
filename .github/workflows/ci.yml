@@ -28,10 +28,15 @@
 #   the package installs and imports        a packaging fault that an editable
 #   from outside its own checkout           install hides completely
 #
-# Three of `pseudohcm`'s checks are NOT here, and are deferred rather than dropped:
-# marker coverage across every emitted record, byte-identical regeneration from a seed,
-# and the de-growth scenario assertions. All three need a generator. Each belongs in
-# this file the day this emulator grows one, and this comment is what says so.
+# THE THREE DEFERRED CHECKS ARE NOW HERE — D97.
+#
+# This file previously recorded three of `pseudohcm`'s checks as deferred rather than
+# dropped: marker coverage across every emitted record, byte-identical regeneration
+# from a seed, and the scenario assertions. All three needed a generator, and the note
+# said they belonged here the day this emulator grew one.
+#
+# It grew one. They are below, and the note is what made that a debt somebody paid
+# rather than a gap nobody remembered.
 
 name: CI
 
@@ -115,4 +120,118 @@ jobs:
               sys.exit('the product is importable from the harness environment — '
                        'Gate 1 has been breached from this side')
           print('the product is not reachable from here, as intended')
+          "
+
+      # Document 10 §3 — the harness's central claim. Same seed, same parameters,
+      # byte-identical output. Everything downstream that pins a count depends on it,
+      # and a generator that selected at random would break it silently.
+      - name: Generation is reproducible
+        working-directory: /tmp
+        run: |
+          python -c "
+          import json
+          from pseudocrm.generator import Parameters, generate
+
+          def build():
+              c = generate(Parameters(units=4))
+              return json.dumps(c.counts(), sort_keys=True) + '|' + json.dumps(
+                  [m['metric_id'] for m in c.business_unit_metrics][:50])
+
+          first, second = build(), build()
+          assert first == second, 'two runs of the same seed produced different corpora'
+          print('reproducible:', first[:80], '...')
+          "
+
+      # Gate 7, from this side. The product refuses marked records; this asserts the
+      # records are actually marked. A record type that slipped through unmarked would
+      # be silently loadable into a customer database, and no test in the product could
+      # detect it — the product's tests prove the refusal works, not that the stamp was
+      # applied.
+      - name: Every emitted record carries the synthetic marker
+        working-directory: /tmp
+        run: |
+          python -c "
+          from contract.markers import SYNTHETIC_MARKER_FIELD, SYNTHETIC_MARKER_VALUE
+          from pseudocrm.emit import ENTITY_FILES
+          from pseudocrm.generator import Parameters, generate
+
+          corpus = generate(Parameters(units=4))
+          total = 0
+          unmarked = []
+          for entity, attribute in ENTITY_FILES.items():
+              rows = getattr(corpus, attribute)
+              assert rows, entity + ' is empty — this check would pass by vacancy'
+              for row in rows:
+                  total += 1
+                  if row.get(SYNTHETIC_MARKER_FIELD) != SYNTHETIC_MARKER_VALUE:
+                      unmarked.append((entity, row))
+          assert not unmarked, str(len(unmarked)) + ' record(s) carry no marker'
+          print('every record marked across', total, 'rows')
+          "
+
+      # Every metric states which way is good. `actual / plan` means nothing without
+      # it: a cost centre eleven per cent under budget and a sales unit eleven per cent
+      # under its number produce the same ratio and mean opposite things.
+      - name: Every metric states a direction
+        working-directory: /tmp
+        run: |
+          python -c "
+          from pseudocrm.generator import Parameters, generate
+
+          corpus = generate(Parameters(units=4))
+          assert corpus.business_unit_metrics, 'no metrics — vacuous'
+          directions = {m['direction'] for m in corpus.business_unit_metrics}
+          assert directions <= {'HIGHER_IS_BETTER', 'LOWER_IS_BETTER'}, directions
+          assert len(directions) == 2, (
+              'every measure runs the same way, so a product could assume a direction '
+              'and stay green: ' + str(directions))
+          assert all(m['plan'] != 0 for m in corpus.business_unit_metrics), (
+              'a zero plan makes the ratio undefined and the schema refuses it')
+          print('directions present:', sorted(directions))
+          "
+
+      # D77's value-chain component asks whether a role delivers an offering. The
+      # catalogue has to contain the awkward cases or the component passes while
+      # handling none of what a real customer has.
+      - name: The catalogue contains the cases the value chain must handle
+        working-directory: /tmp
+        run: |
+          python -c "
+          from datetime import date
+          from pseudocrm.generator import STAGES, Parameters, generate
+          from pseudocrm.scenarios import inject_offering_retirement
+
+          c = generate(Parameters(units=4, offerings=24))
+          assert c.offerings, 'no offerings — vacuous'
+          assert {o['lifecycle_stage'] for o in c.offerings} == set(STAGES)
+          owners = [o['owning_org_unit_id'] for o in c.offerings]
+          assert None in owners and any(o is not None for o in owners), (
+              'many offerings are owned by no single unit, and inventing an owner '
+              'places a role in a value chain it is not in')
+          assert any(o['description'] is None for o in c.offerings)
+          assert all(o['description'] != '' for o in c.offerings)
+
+          before = sum(1 for o in c.offerings if o['lifecycle_stage'] == 'RETIRED')
+          r = inject_offering_retirement(c, on=date(2025, 6, 30), count=2)
+          after = sum(1 for o in c.offerings if o['lifecycle_stage'] == 'RETIRED')
+          assert after == before + 2
+          retired = [o for o in c.offerings if o['offering_id'] in r['identifiers']]
+          assert all(o['valid_to'] == '2025-06-30' for o in retired), (
+              'a retired offering is a record version ending, not only a label change')
+          print('catalogue:', len(c.offerings), '| retired:', r['offerings_retired'])
+          "
+
+      # The catalogue belongs to this emulator alone. Two systems producing offering
+      # records would mean deciding whether an SCM item and a CRM product are the same
+      # thing — cross-system identity resolution, out of scope for inference under D56.
+      - name: This emulator owns the catalogue and no other does
+        run: |
+          python -c "
+          from pathlib import Path
+          from pseudocrm.emit import ENTITY_FILES
+          assert 'Offering' in ENTITY_FILES
+          sibling = Path('..') / 'pseudoscm' / 'src' / 'pseudoscm' / 'emit.py'
+          if sibling.exists():
+              assert 'Offering' not in sibling.read_text(encoding='utf-8')
+          print('one catalogue, in the system that defines it')
           "
