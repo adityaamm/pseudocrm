@@ -204,7 +204,7 @@ jobs:
           c = generate(Parameters(units=4, offerings=24))
           assert c.offerings, 'no offerings — vacuous'
           assert {o['lifecycle_stage'] for o in c.offerings} == set(STAGES)
-          owners = [o['owning_org_unit_id'] for o in c.offerings]
+          owners = [o['owning_source_unit_id'] for o in c.offerings]
           assert None in owners and any(o is not None for o in owners), (
               'many offerings are owned by no single unit, and inventing an owner '
               'places a role in a value chain it is not in')
