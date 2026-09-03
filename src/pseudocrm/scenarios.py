@@ -79,7 +79,7 @@ def offerings_for_unit(corpus: Corpus, unit_code: str) -> list[dict]:
     """Offerings a named unit owns. Normalises the caller's plain code, since the
     corpus holds identifiers stamped into the reserved namespace."""
     stamped = _namespaced(unit_code)
-    return [o for o in corpus.offerings if o["owning_org_unit_id"] == stamped]
+    return [o for o in corpus.offerings if o["owning_source_unit_id"] == stamped]
 
 
 def _stage_rank(stage: str) -> int:

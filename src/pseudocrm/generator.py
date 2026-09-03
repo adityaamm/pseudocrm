@@ -131,7 +131,24 @@ def generate(params: Parameters | None = None) -> Corpus:
             "name": f"{kind.title().replace('_', ' ')} line {n:03d}",
             "kind": kind,
             "lifecycle_stage": stage,
-            "owning_org_unit_id": codes[n % len(codes)] if owned else None,
+            # D104. WAS `owning_org_unit_id`, AND THE CHAIN LOADED TWELVE OWNERLESS
+            # OFFERINGS BECAUSE OF IT.
+            #
+            # The canonical column is `owning_source_unit_code` — this system's own
+            # territory code, resolved through `unit_correspondence` at read time
+            # (D103). The profile maps it from `owning_source_unit_id`; this emitted
+            # `owning_org_unit_id`, which matched nothing, passed through unmapped and
+            # was dropped by the store with a warning nobody was reading.
+            #
+            # Every offering therefore arrived with no owning unit, and D77's
+            # value-chain component would have found that no offering belongs to any
+            # unit — silent, plausible and wrong. Found by running the chain, which is
+            # the only place it was visible: this harness's own tests assert on the
+            # corpus, not on what lands.
+            #
+            # Named `_id` so the shared marking machinery moves it into the reserved
+            # namespace, like every other identifier.
+            "owning_source_unit_id": codes[n % len(codes)] if owned else None,
             "description": (
                 f"A {kind.lower().replace('_', ' ')} in the {stage.lower()} stage, "
                 "sold through the direct channel." if described else None),

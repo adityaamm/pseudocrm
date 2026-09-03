@@ -57,7 +57,7 @@ class TestTheCatalogue:
         owned by none, and inventing an owner would place a role in a value chain it
         is not in."""
         offerings = generate(Parameters(units=4, offerings=24)).offerings
-        owners = [o["owning_org_unit_id"] for o in offerings]
+        owners = [o["owning_source_unit_id"] for o in offerings]
         assert None in owners and any(o is not None for o in owners)
 
     def test_every_lifecycle_stage_appears_including_retired(self):
@@ -156,7 +156,7 @@ class TestScenarios:
         """The corpus holds stamped identifiers; a caller names a unit plainly."""
         corpus = generate(small())
         owned = offerings_for_unit(corpus, "TERR-001")
-        assert all(o["owning_org_unit_id"] == "PSEUDO::TERR-001" for o in owned)
+        assert all(o["owning_source_unit_id"] == "PSEUDO::TERR-001" for o in owned)
 
 
 class TestTheMarker:
